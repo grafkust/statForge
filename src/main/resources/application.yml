@@ -4,3 +4,7 @@ spring:
     username: ${DB_USER}
     password: ${DB_PASSWORD}
 
+file-path:
+  los-angeles: src/main/resources/crime/records/Los_Angeles_Crime_Data_from_2020_to_Present.csv
+  new-york: src/main/resources/crime/records/New_York_Crime_from_2020_to_Present.csv
+
