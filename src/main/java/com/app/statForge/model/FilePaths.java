@@ -6,7 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConfigurationProperties(prefix = "file-path")
+@ConfigurationProperties(prefix = "file.path")
 @Getter
 @Setter
 public class FilePaths {

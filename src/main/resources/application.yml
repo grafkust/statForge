@@ -4,7 +4,19 @@ spring:
     username: ${DB_USER}
     password: ${DB_PASSWORD}
 
-file-path:
-  los-angeles: crime/records/Los_Angeles_Crime_Data_from_2020_to_Present.csv
-  new-york: crime/records/New_York_Crime_from_2020_to_Present.csv
+file:
+  path:
+    los-angeles: crime/records/Los_Angeles_Crime_Data_from_2020_to_Present.csv
+    new-york: crime/records/New_York_Crime_from_2020_to_Present.csv
+  batch-size: 1000
 
+schema:
+  origin:
+    cities: r_cities
+    crime-codes: r_crime_codes
+    modus_operandi: r_modus_operandi
+    root_modus_operandi: r_root_modus_operandi
+    premise_codes: r_premise_codes
+    victim_descent: r_victim_descent
+    weapon_codes: r_weapon_codes
+    crime_records: t_crime_records

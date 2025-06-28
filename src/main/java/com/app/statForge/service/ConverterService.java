@@ -1,13 +1,15 @@
 package com.app.statForge.service;
 
+import com.app.statForge.model.Cities;
+import com.app.statForge.model.FilePaths;
 import com.app.statForge.model.RecordDto;
 import com.app.statForge.util.SaveParseUtil;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -26,14 +28,19 @@ public class ConverterService {
 
     private final SaveParseUtil parser;
     private final CrimeRecordService crimeRecordService;
+    private final FilePaths filePaths;
+
+    @Value("${file.batch-size}")
+    private int batchSize;
 
     /**
      * Читает записи из scv и сохраняет в БД
      *
      * @param recordsCount число обрабатываемых записей (-1 для всех)
-     * @param filePath     путь до scv файла
      */
-    public void convertRecords(int recordsCount, String filePath) {
+    public void convertRecords(int recordsCount, String cityAlias) {
+        String filePath = identifyFilePath(cityAlias);
+
         try (InputStream stream = getClass().getClassLoader().getResourceAsStream(filePath)) {
 
             if (Objects.isNull(stream)) {
@@ -41,8 +48,8 @@ public class ConverterService {
             }
 
             int processedCount = 0;
-            int batchSize = 1000;
             List<RecordDto> processingRecords = new ArrayList<>();
+            Integer cityId = crimeRecordService.getCityIdByName(cityAlias);
 
             try (CSVReader reader = new CSVReader(new InputStreamReader(stream))) {
                 String[] row;
@@ -65,7 +72,7 @@ public class ConverterService {
                         processedCount++;
 
                         if (processingRecords.size() >= batchSize) {
-                            crimeRecordService.saveRecordsBatch(processingRecords, 1);
+                            crimeRecordService.saveRecordsBatch(processingRecords, cityId);
                             processingRecords.clear();
                             log.info("Обработано {} записей", processedCount);
                         }
@@ -73,7 +80,7 @@ public class ConverterService {
                 }
 
                 if (!processingRecords.isEmpty()) {
-                    crimeRecordService.saveRecordsBatch(processingRecords, 1);
+                    crimeRecordService.saveRecordsBatch(processingRecords, cityId);
                     log.info("Обработано {} записей (финальный батч)", processedCount);
                 }
 
@@ -87,35 +94,12 @@ public class ConverterService {
     }
 
 
-    /**
-     * Сохраняет запись в таблицу t_crime_records
-     * <p>
-     * Важно:
-     * СТРУКТУРА БД                                                                    СТРУКТУРА DTO
-     * city_id integer references r_cities(id)                        зависит от файла из которого загружается запись (ссылка на r_cities)
-     * <p>
-     * weapon_code_id bigint references r_weapon_codes(id)            поле weaponCode записи (ссылка на поле code справочника r_weapon_codes)
-     * <p>
-     * crime_code_id bigint references r_crime_codes(id)              поле crimeCode записи (ссылка на поле code справочника r_crime_codes)
-     * crime_code_1_id bigint references r_crime_codes(id)            поле additionalCrimeCode1 записи (ссылка на поле code справочника r_crime_codes)
-     * crime_code_2_id bigint references r_crime_codes(id)            поле additionalCrimeCode2 записи (ссылка на поле code справочника r_crime_codes)
-     * crime_code_3_id bigint references r_crime_codes(id)            поле additionalCrimeCode3 записи (ссылка на поле code справочника r_crime_codes)
-     * crime_code_4_id bigint references r_crime_codes(id)            поле additionalCrimeCode4 записи (ссылка на поле code справочника r_crime_codes)
-     * <p>
-     * modus_operandi_1_id bigint references r_modus_operandi(id)     поле modusOperandiCodes в dto содержит строку с кодами (может быть до 10).
-     * modus_operandi_2_id bigint references r_modus_operandi(id)     каждый код ссылка на поле code справочника r_modus_operandi.
-     * <p>
-     * victim_descent_id bigint references r_victim_descent(id)       поле victimDescentCode записи (ссылка на поле alias справочника r_victim_descent)
-     * premise_code_id bigint references r_premise_codes(id)          нужно создавать запись в r_premise_codes с полями code и description по значению premiseCode и premiseDescription
-     */
-    @Transactional
-    public void saveRecord(RecordDto recordDto) {
-        //получаем все необходимые id (а лучше написать SQL на insert с шаблоном и вложенными запросами)
-        //если необходимо, сначала создаем запись в r_premise_codes и получаем ее id
-        //все делаем в транзакции для одной записи
-        //Проверка, что такая запись существует, будет выполняться через unique constraint на occurrence_report_number
-
+    private String identifyFilePath(String cityAbbreviation) {
+        return switch (cityAbbreviation) {
+            case (Cities.NY_ALIAS) -> filePaths.getNewYork();
+            case (Cities.LA_ALIAS) -> filePaths.getLosAngeles();
+            default -> throw new IllegalArgumentException("Unknown city alias: " + cityAbbreviation);
+        };
     }
-
 
 }

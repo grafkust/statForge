@@ -1,6 +1,7 @@
 package com.app.statForge.service;
 
 import com.app.statForge.model.RecordDto;
+import com.app.statForge.model.SchemaConfig;
 import io.micrometer.common.util.StringUtils;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
@@ -16,9 +17,11 @@ import java.util.*;
 public class CrimeRecordService {
 
     private final NamedParameterJdbcTemplate jdbcTemplate;
+    private final SchemaConfig schemaConfig;
 
-    public CrimeRecordService(NamedParameterJdbcTemplate jdbcTemplate) {
+    public CrimeRecordService(NamedParameterJdbcTemplate jdbcTemplate, SchemaConfig schemaConfig) {
         this.jdbcTemplate = jdbcTemplate;
+        this.schemaConfig = schemaConfig;
     }
 
     /**
@@ -53,16 +56,25 @@ public class CrimeRecordService {
             // 2. Разбираем modus operandi коды
             List<Long> modusOperandiIds = parseModusOperandiCodes(recordDto.getModusOperandiCodes());
 
-            // 3. Выполняем основной INSERT с подзапросами для получения ID
+            // 3. Строим основной INSERT запрос и задаем все параметры для выполнения запроса
             String insertSql = buildInsertQuery();
-
             MapSqlParameterSource params = buildParameters(recordDto, cityId, premiseCodeId, modusOperandiIds);
 
-            UUID recordUuid = jdbcTemplate.queryForObject(insertSql, params, UUID.class);
+            jdbcTemplate.update(insertSql, params);
 
         } catch (Exception e) {
             log.error("Ошибка при сохранении записи: {}", e.getMessage(), e);
             throw new RuntimeException("Не удалось сохранить запись преступления", e);
+        }
+    }
+
+    @Transactional
+    public Integer getCityIdByName(String alias) {
+        String sql = String.format("SELECT id FROM %s WHERE alias = :alias", schemaConfig.getCities());
+        try {
+            return jdbcTemplate.queryForObject(sql, Map.of("alias", alias), Integer.class);
+        } catch (EmptyResultDataAccessException e) {
+            throw new IllegalArgumentException("Unknown city alias: " + alias);
         }
     }
 
@@ -74,7 +86,7 @@ public class CrimeRecordService {
             return false; // если номера нет, считаем что записи не существует
         }
         try {
-            String checkSql = "SELECT COUNT(*) FROM t_crime_records WHERE occurrence_report_number = :reportNumber";
+            String checkSql = String.format("SELECT COUNT(*) FROM %s WHERE occurrence_report_number = :reportNumber", schemaConfig.getCrimeRecords());
 
             Integer count = jdbcTemplate.queryForObject(checkSql,
                     Map.of("reportNumber", occurrenceReportNumber),
@@ -85,8 +97,6 @@ public class CrimeRecordService {
             log.error("Ошибка при проверке записи: {}", e.getMessage(), e);
             throw new RuntimeException("Не удалось проверить запись на существование", e);
         }
-
-
     }
 
     /**
@@ -95,20 +105,15 @@ public class CrimeRecordService {
     private Long ensurePremiseCodeExists(Integer premiseCode, String premiseDescription) {
         if (Objects.isNull(premiseCode)) return null;
 
-        String checkSql = """
-                SELECT id FROM r_premise_codes WHERE code = :code
-                """;
+        String checkSql = String.format("SELECT id FROM %s WHERE code = :code", schemaConfig.getPremiseCodes());
 
         try {
             return jdbcTemplate.queryForObject(checkSql,
                     Map.of("code", premiseCode), Long.class);
         } catch (EmptyResultDataAccessException e) {
-            if (!StringUtils.isEmpty(premiseDescription) && !StringUtils.isEmpty(premiseDescription)) {
-                String insertSql = """
-                    INSERT INTO r_premise_codes (code, description) 
-                    VALUES (:code, :description) 
-                    RETURNING id
-                    """;
+            if (!StringUtils.isEmpty(premiseDescription)) {
+
+                String insertSql = String.format("INSERT INTO %s (code, description) VALUES (:code, :description) RETURNING id", schemaConfig.getPremiseCodes());
 
                 return jdbcTemplate.queryForObject(insertSql,
                         Map.of("code", premiseCode, "description", premiseDescription),
@@ -148,8 +153,8 @@ public class CrimeRecordService {
     }
 
     private Long findExistingModusOperandi(Integer modusCode) {
-        String sql = "SELECT id FROM r_modus_operandi WHERE code = :code";
-        String rootSql = "SELECT id FROM r_root_modus_operandi WHERE code = :code";
+        String sql = String.format("SELECT id FROM %s WHERE code = :code", schemaConfig.getModusOperandi());
+        String rootSql = String.format("SELECT id FROM %s WHERE code = :code", schemaConfig.getRootModusOperandi());
 
         try {
             return jdbcTemplate.queryForObject(sql, Map.of("code", modusCode), Long.class);
@@ -163,7 +168,7 @@ public class CrimeRecordService {
     }
 
     private Long createNewModusOperandi(Integer modusCode) {
-        String insertSql = "INSERT INTO r_modus_operandi (code) VALUES (:code) RETURNING id";
+        String insertSql = String.format("INSERT INTO %s (code) VALUES (:code) RETURNING id", schemaConfig.getModusOperandi());
 
         Long newId = jdbcTemplate.queryForObject(insertSql, Map.of("code", modusCode), Long.class);
         log.info("Создан новый modus operandi: код {} -> id {}", modusCode, newId);
@@ -244,7 +249,7 @@ public class CrimeRecordService {
                     :modusOperandi8Id,
                     :modusOperandi9Id,
                     :modusOperandi10Id
-                ) RETURNING uuid
+                )
                 """;
     }
 
@@ -287,7 +292,6 @@ public class CrimeRecordService {
 
         return params;
     }
-
 
 }
 
