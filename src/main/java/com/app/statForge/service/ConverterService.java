@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,14 +29,12 @@ public class ConverterService {
     private final CrimeRecordService crimeRecordService;
 
     /**
-     * Читает записи из scv
+     * Читает записи из scv и сохраняет в БД
      *
      * @param recordsCount число обрабатываемых записей (-1 для всех)
      * @param filePath     путь до scv файла
-     * @return список RecordDto объектов
      */
-    public void convertRecordsBatch(int recordsCount, String filePath) {
-
+    public void convertRecords(int recordsCount, String filePath) {
         try (InputStream stream = getClass().getClassLoader().getResourceAsStream(filePath)) {
 
             if (Objects.isNull(stream)) {
@@ -44,7 +43,7 @@ public class ConverterService {
 
             int processedCount = 0;
             int batchSize = 1000;
-            List<RecordDto> batch = new ArrayList<>();
+            List<RecordDto> processingRecords = new ArrayList<>();
 
             try (CSVReader reader = new CSVReader(new InputStreamReader(stream))) {
                 String[] row;
@@ -63,21 +62,19 @@ public class ConverterService {
 
                     RecordDto record = parser.parseRowToRecord(row);
                     if (record != null) {
-                        batch.add(record);
+                        processingRecords.add(record);
                         processedCount++;
 
-                        // Сохраняем батчами
-                        if (batch.size() >= batchSize) {
-                            crimeRecordService.saveRecordsBatch(batch, 1);
-                            batch.clear();
+                        if (processingRecords.size() >= batchSize) {
+                            crimeRecordService.saveRecordsBatch(processingRecords, 1);
+                            processingRecords.clear();
                             log.info("Обработано {} записей", processedCount);
                         }
                     }
                 }
 
-                // Сохраняем остатки
-                if (!batch.isEmpty()) {
-                    crimeRecordService.saveRecordsBatch(batch, 1);
+                if (!processingRecords.isEmpty()) {
+                    crimeRecordService.saveRecordsBatch(processingRecords, 1);
                     log.info("Обработано {} записей (финальный батч)", processedCount);
                 }
 
@@ -85,7 +82,6 @@ public class ConverterService {
                 log.error("Ошибка при чтении CSV из InputStream", e);
                 throw new RuntimeException("Ошибка обработки CSV", e);
             }
-
         } catch (Exception e) {
             throw new RuntimeException("Ошибка при загрузке файла: " + filePath, e);
         }

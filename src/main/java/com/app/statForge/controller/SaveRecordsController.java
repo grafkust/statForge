@@ -20,14 +20,13 @@ public class SaveRecordsController {
 
     @GetMapping("/LA")
     public void convertLA(@RequestParam(required = false, defaultValue = "1") Integer recordsCount) {
-        converterService.convertRecordsBatch(recordsCount, filePaths.getLosAngeles());
+        converterService.convertRecords(recordsCount, filePaths.getLosAngeles());
     }
 
 
     @GetMapping("/NY")
     public void convertNY(@RequestParam(required = false, defaultValue = "1") Integer recordsCount) {
-        converterService.convertRecordsBatch(recordsCount, filePaths.getNewYork());
+        converterService.convertRecords(recordsCount, filePaths.getNewYork());
     }
-
 
 }
