@@ -63,6 +63,6 @@ public enum CsvColumn {
             return null;
         }
         String value = row[index];
-        return (value == null || value.trim().isEmpty()) ? null : value.trim();
+        return (value == null || value.trim().isEmpty()) ? null : value.trim().replaceAll("\\s+", " ");
     }
 }

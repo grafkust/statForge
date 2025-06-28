@@ -3,7 +3,8 @@ package com.app.statForge.model;
 import lombok.Builder;
 import lombok.Data;
 
-import java.util.Date;
+import java.time.LocalDate;
+import java.time.LocalTime;
 
 /**
  * Класс описывающий структуру scv записи
@@ -13,10 +14,10 @@ import java.util.Date;
 public class RecordDto {
 
     private Integer occurrenceReportNumber;
-    private Date reportCreateDate;
+    private LocalDate reportCreateDate;
 
-    private Date occurrenceDate;
-    private String occurrenceTime;
+    private LocalDate occurrenceDate;
+    private LocalTime occurrenceTime;
 
     private String areaCode;
     private String areaName;
@@ -32,7 +33,7 @@ public class RecordDto {
 
     private Integer victimAge;
     private Character victimSex;
-    private Integer victimDescentCode;
+    private Character victimDescentCode;
 
     /**
      * Место происшествия
