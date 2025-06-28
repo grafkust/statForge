@@ -1,0 +1,5 @@
+
+
+TRUNCATE TABLE t_crime_records RESTART IDENTITY CASCADE;
+ALTER SEQUENCE t_crime_records_id_seq RESTART WITH 1;
+
