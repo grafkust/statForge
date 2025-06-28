@@ -3,3 +3,8 @@ spring:
     url: jdbc:postgresql://localhost:${DB_PORT}/${DB_NAME}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
+
+file-path:
+  los-angeles: crime/records/Los_Angeles_Crime_Data_from_2020_to_Present.csv
+  new-york: crime/records/New_York_Crime_from_2020_to_Present.csv
+
