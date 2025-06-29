@@ -1,34 +1,40 @@
 package com.app.statForge.service;
 
+import com.app.statForge.dao.CitiesDao;
+import com.app.statForge.dao.CrimeRecordsDao;
+import com.app.statForge.dao.ModusOperandiDao;
+import com.app.statForge.dao.PremiseCodeDao;
+import com.app.statForge.model.CatalogItemDto;
 import com.app.statForge.model.RecordDto;
-import com.app.statForge.model.SchemaConfig;
 import io.micrometer.common.util.StringUtils;
 import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
 
-@Service
 @Slf4j
+@Service
+@RequiredArgsConstructor
 public class CrimeRecordService {
 
-    private final NamedParameterJdbcTemplate jdbcTemplate;
-    private final SchemaConfig schemaConfig;
+    private final CrimeRecordsDao crimeRecordsDAO;
+    private final PremiseCodeDao premiseCodeDAO;
+    private final ModusOperandiDao modusOperandiDAO;
+    private final CitiesDao citiesDao;
 
-    public CrimeRecordService(NamedParameterJdbcTemplate jdbcTemplate, SchemaConfig schemaConfig) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.schemaConfig = schemaConfig;
-    }
 
     /**
      * Batch сохранение для импорта CSV
      */
     @Transactional
-    public void saveRecordsBatch(List<RecordDto> records, Integer cityId) {
+    public void saveRecordsBatch(List<RecordDto> records, Long cityId) {
         log.info("Начинаем batch сохранение {} записей", records.size());
 
         for (RecordDto record : records) {
@@ -41,63 +47,40 @@ public class CrimeRecordService {
      * Сохраняет запись преступления с автоматическим созданием связанных справочников
      */
     @Transactional
-    public void saveRecord(RecordDto recordDto, Integer cityId) {
+    public void saveRecord(RecordDto recordDto, Long cityId) {
 
-        if (isRecordAlreadyExists(recordDto.getOccurrenceReportNumber())) {
-            log.warn("Запись с occurrence_report_number {} уже существует, пропускаем сохранение",
-                    recordDto.getOccurrenceReportNumber());
+        Integer reportNumber = recordDto.getOccurrenceReportNumber();
+
+        if (Objects.isNull(reportNumber) || !CollectionUtils.isEmpty(crimeRecordsDAO.getCatalogItemByReportNumber(reportNumber))) {
+            log.warn("Запись с occurrence_report_number {} не может быть сохранена", reportNumber);
             return;
         }
 
         try {
-            // 1. Создаем premise_codes если нужно
+            // Создаем premise_codes если нужно
             Long premiseCodeId = ensurePremiseCodeExists(recordDto.getPremiseCode(), recordDto.getPremiseDescription());
 
-            // 2. Разбираем modus operandi коды
             List<Long> modusOperandiIds = parseModusOperandiCodes(recordDto.getModusOperandiCodes());
 
-            // 3. Строим основной INSERT запрос и задаем все параметры для выполнения запроса
-            String insertSql = buildInsertQuery();
+            // задаем все параметры для выполнения запроса
             MapSqlParameterSource params = buildParameters(recordDto, cityId, premiseCodeId, modusOperandiIds);
 
-            jdbcTemplate.update(insertSql, params);
+            crimeRecordsDAO.createNewRecord(params);
 
         } catch (Exception e) {
-            log.error("Ошибка при сохранении записи: {}", e.getMessage(), e);
             throw new RuntimeException("Не удалось сохранить запись преступления", e);
         }
     }
 
     @Transactional
-    public Integer getCityIdByName(String alias) {
-        String sql = String.format("SELECT id FROM %s WHERE alias = :alias", schemaConfig.getCities());
-        try {
-            return jdbcTemplate.queryForObject(sql, Map.of("alias", alias), Integer.class);
-        } catch (EmptyResultDataAccessException e) {
+    public Long getCityIdByName(String alias) {
+        CatalogItemDto city = citiesDao.getCityByAlias(alias);
+        if (CollectionUtils.isEmpty(city)) {
             throw new IllegalArgumentException("Unknown city alias: " + alias);
         }
+        return city.getId();
     }
 
-    /**
-     * Проверяет существование записи по occurrence_report_number
-     */
-    private boolean isRecordAlreadyExists(Integer occurrenceReportNumber) {
-        if (occurrenceReportNumber == null) {
-            return false; // если номера нет, считаем что записи не существует
-        }
-        try {
-            String checkSql = String.format("SELECT COUNT(*) FROM %s WHERE occurrence_report_number = :reportNumber", schemaConfig.getCrimeRecords());
-
-            Integer count = jdbcTemplate.queryForObject(checkSql,
-                    Map.of("reportNumber", occurrenceReportNumber),
-                    Integer.class);
-
-            return count != null && count > 0;
-        } catch (Exception e) {
-            log.error("Ошибка при проверке записи: {}", e.getMessage(), e);
-            throw new RuntimeException("Не удалось проверить запись на существование", e);
-        }
-    }
 
     /**
      * Создает premise_code если его нет
@@ -105,22 +88,11 @@ public class CrimeRecordService {
     private Long ensurePremiseCodeExists(Integer premiseCode, String premiseDescription) {
         if (Objects.isNull(premiseCode)) return null;
 
-        String checkSql = String.format("SELECT id FROM %s WHERE code = :code", schemaConfig.getPremiseCodes());
-
-        try {
-            return jdbcTemplate.queryForObject(checkSql,
-                    Map.of("code", premiseCode), Long.class);
-        } catch (EmptyResultDataAccessException e) {
-            if (!StringUtils.isEmpty(premiseDescription)) {
-
-                String insertSql = String.format("INSERT INTO %s (code, description) VALUES (:code, :description) RETURNING id", schemaConfig.getPremiseCodes());
-
-                return jdbcTemplate.queryForObject(insertSql,
-                        Map.of("code", premiseCode, "description", premiseDescription),
-                        Long.class);
-            }
+        CatalogItemDto record = premiseCodeDAO.getPremiseCodeByCode(premiseCode);
+        if (CollectionUtils.isEmpty(record) && StringUtils.isNotBlank(premiseDescription)) {
+            return premiseCodeDAO.createPremiseCode(premiseCode, premiseDescription);
         }
-        return null;
+        return CollectionUtils.isEmpty(record) ? null : record.getId();
     }
 
     /**
@@ -143,7 +115,7 @@ public class CrimeRecordService {
                 if (Objects.nonNull(existingId)) {
                     ids.add(existingId);
                 } else {
-                    Long newId = createNewModusOperandi(modusCode);
+                    Long newId = modusOperandiDAO.createModusOperandi(modusCode);
                     ids.add(newId);
                 }
             }
@@ -153,110 +125,18 @@ public class CrimeRecordService {
     }
 
     private Long findExistingModusOperandi(Integer modusCode) {
-        String sql = String.format("SELECT id FROM %s WHERE code = :code", schemaConfig.getModusOperandi());
-        String rootSql = String.format("SELECT id FROM %s WHERE code = :code", schemaConfig.getRootModusOperandi());
+        CatalogItemDto record = modusOperandiDAO.getModusOperandiByCode(modusCode);
 
-        try {
-            return jdbcTemplate.queryForObject(sql, Map.of("code", modusCode), Long.class);
-        } catch (EmptyResultDataAccessException e) {
-            try {
-                return jdbcTemplate.queryForObject(rootSql, Map.of("code", modusCode), Long.class);
-            } catch (EmptyResultDataAccessException e1) {
-                return null;
-            }
+        if (CollectionUtils.isEmpty(record)) {
+            record = modusOperandiDAO.getRootModusOperandiByCode(modusCode);
         }
-    }
-
-    private Long createNewModusOperandi(Integer modusCode) {
-        String insertSql = String.format("INSERT INTO %s (code) VALUES (:code) RETURNING id", schemaConfig.getModusOperandi());
-
-        Long newId = jdbcTemplate.queryForObject(insertSql, Map.of("code", modusCode), Long.class);
-        log.info("Создан новый modus operandi: код {} -> id {}", modusCode, newId);
-
-        return newId;
-    }
-
-    /**
-     * Строит SQL запрос для вставки
-     */
-    private String buildInsertQuery() {
-        return """
-                INSERT INTO t_crime_records (
-                    occurrence_report_number,
-                    report_create_date,
-                    occurrence_date,
-                    city_id,
-                    area_name,
-                    reporting_area_number,
-                    crime_category,
-                    crime_code_id,
-                    victim_age,
-                    victim_sex,
-                    victim_descent_id,
-                    premise_code_id,
-                    weapon_code_id,
-                    case_status,
-                    status_description,
-                    crime_code_1_id,
-                    crime_code_2_id,
-                    crime_code_3_id,
-                    crime_code_4_id,
-                    location,
-                    cross_street,
-                    latitude,
-                    longitude,
-                    modus_operandi_1_id,
-                    modus_operandi_2_id,
-                    modus_operandi_3_id,
-                    modus_operandi_4_id,
-                    modus_operandi_5_id,
-                    modus_operandi_6_id,
-                    modus_operandi_7_id,
-                    modus_operandi_8_id,
-                    modus_operandi_9_id,
-                    modus_operandi_10_id
-                ) VALUES (
-                    :occurrenceReportNumber,
-                    :reportCreateDate,
-                    :occurrenceDate,
-                    :cityId,
-                    :areaName,
-                    :reportingAreaNumber,
-                    :crimeCategory,
-                    (SELECT id FROM r_crime_codes WHERE code = :crimeCode),
-                    :victimAge,
-                    :victimSex,
-                    (SELECT id FROM r_victim_descent WHERE alias = :victimDescentCode),
-                    :premiseCodeId,
-                    (SELECT id FROM r_weapon_codes WHERE code = :weaponCode),
-                    :status,
-                    :statusDescription,
-                    (SELECT id FROM r_crime_codes WHERE code = :additionalCrimeCode1),
-                    (SELECT id FROM r_crime_codes WHERE code = :additionalCrimeCode2),
-                    (SELECT id FROM r_crime_codes WHERE code = :additionalCrimeCode3),
-                    (SELECT id FROM r_crime_codes WHERE code = :additionalCrimeCode4),
-                    :location,
-                    :crossStreet,
-                    :latitude,
-                    :longitude,
-                    :modusOperandi1Id,
-                    :modusOperandi2Id,
-                    :modusOperandi3Id,
-                    :modusOperandi4Id,
-                    :modusOperandi5Id,
-                    :modusOperandi6Id,
-                    :modusOperandi7Id,
-                    :modusOperandi8Id,
-                    :modusOperandi9Id,
-                    :modusOperandi10Id
-                )
-                """;
+        return CollectionUtils.isEmpty(record) ? null : record.getId();
     }
 
     /**
      * Строит параметры для запроса
      */
-    private MapSqlParameterSource buildParameters(RecordDto dto, Integer cityId,
+    private MapSqlParameterSource buildParameters(RecordDto dto, Long cityId,
                                                   Long premiseCodeId, List<Long> modusOperandiIds) {
         MapSqlParameterSource params = new MapSqlParameterSource();
 
