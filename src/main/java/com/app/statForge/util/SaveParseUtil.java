@@ -27,12 +27,6 @@ public class SaveParseUtil {
      */
     public RecordDto parseRowToRecord(String[] row) {
         try {
-            if (row.length < CsvColumn.MINIMUM_COLUMNS) {
-                log.warn("Недостаточно колонок в строке CSV: ожидается {}, получено {}",
-                        CsvColumn.MINIMUM_COLUMNS, row.length);
-                return null;
-            }
-
             return RecordDto.builder()
                     .occurrenceReportNumber(parseInteger(CsvColumn.DR_NO.getValue(row)))
                     .reportCreateDate(parseDate(CsvColumn.DATE_RPTD.getValue(row)))
