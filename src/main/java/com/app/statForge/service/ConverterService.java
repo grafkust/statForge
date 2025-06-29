@@ -1,9 +1,6 @@
 package com.app.statForge.service;
 
-import com.app.statForge.model.Cities;
-import com.app.statForge.model.CsvColumn;
-import com.app.statForge.model.FilePaths;
-import com.app.statForge.model.RecordDto;
+import com.app.statForge.model.*;
 import com.app.statForge.util.ParserUtil;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvException;
