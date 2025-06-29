@@ -44,8 +44,7 @@ public class CrimeRecordService {
     public void saveRecord(RecordDto recordDto, Integer cityId) {
 
         if (isRecordAlreadyExists(recordDto.getOccurrenceReportNumber())) {
-            log.warn("Запись с occurrence_report_number {} уже существует, пропускаем сохранение",
-                    recordDto.getOccurrenceReportNumber());
+            log.warn("Запись с occurrence_report_number {} уже существует", recordDto.getOccurrenceReportNumber());
             return;
         }
 
@@ -63,7 +62,6 @@ public class CrimeRecordService {
             jdbcTemplate.update(insertSql, params);
 
         } catch (Exception e) {
-            log.error("Ошибка при сохранении записи: {}", e.getMessage(), e);
             throw new RuntimeException("Не удалось сохранить запись преступления", e);
         }
     }
@@ -82,8 +80,8 @@ public class CrimeRecordService {
      * Проверяет существование записи по occurrence_report_number
      */
     private boolean isRecordAlreadyExists(Integer occurrenceReportNumber) {
-        if (occurrenceReportNumber == null) {
-            return false; // если номера нет, считаем что записи не существует
+        if (Objects.isNull(occurrenceReportNumber)) {
+            return false;
         }
         try {
             String checkSql = String.format("SELECT COUNT(*) FROM %s WHERE occurrence_report_number = :reportNumber", schemaConfig.getCrimeRecords());
@@ -95,7 +93,7 @@ public class CrimeRecordService {
             return count != null && count > 0;
         } catch (Exception e) {
             log.error("Ошибка при проверке записи: {}", e.getMessage(), e);
-            throw new RuntimeException("Не удалось проверить запись на существование", e);
+            throw new RuntimeException("Ошибка при проверке записи", e);
         }
     }
 
