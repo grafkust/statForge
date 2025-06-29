@@ -1,6 +1,9 @@
 package com.app.statForge.service;
 
-import com.app.statForge.model.*;
+import com.app.statForge.model.Cities;
+import com.app.statForge.model.CsvColumn;
+import com.app.statForge.model.FilePaths;
+import com.app.statForge.model.RecordDto;
 import com.app.statForge.util.ParserUtil;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvException;
@@ -36,8 +39,9 @@ public class ConverterService {
      *
      * @param recordsCount число обрабатываемых записей (-1 для всех)
      */
-    public void convertRecords(int recordsCount, String cityAlias) {
+    public Integer convertRecords(int recordsCount, String cityAlias) {
         String filePath = identifyFilePath(cityAlias);
+        int processedCount = 0;
 
         try (InputStream stream = getClass().getClassLoader().getResourceAsStream(filePath)) {
 
@@ -45,7 +49,7 @@ public class ConverterService {
                 throw new RuntimeException("Файл не найден в ресурсах: " + filePath);
             }
 
-            int processedCount = 0;
+
             List<RecordDto> processingRecords = new ArrayList<>();
             Long cityId = crimeRecordService.getCityIdByName(cityAlias);
 
@@ -92,7 +96,7 @@ public class ConverterService {
 
                 if (!processingRecords.isEmpty()) {
                     crimeRecordService.saveRecordsBatch(processingRecords, cityId);
-                    log.info("Обработано {} записей (финальный батч)", processedCount);
+                    return processedCount;
                 }
 
             } catch (IOException | CsvException e) {
@@ -101,6 +105,7 @@ public class ConverterService {
         } catch (Exception e) {
             throw new RuntimeException("Ошибка при загрузке файла: " + filePath, e);
         }
+        return processedCount;
     }
 
     /**

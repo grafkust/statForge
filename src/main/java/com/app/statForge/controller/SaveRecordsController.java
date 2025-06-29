@@ -3,6 +3,7 @@ package com.app.statForge.controller;
 import com.app.statForge.service.ConverterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -15,14 +16,16 @@ public class SaveRecordsController {
 
 
     @GetMapping("/{cityAlias}")
-    public void convertCSV(@PathVariable String cityAlias,
-                           @RequestParam(required = false, defaultValue = "1") Integer count) {
-        converterService.convertRecords(count, cityAlias);
+    public ResponseEntity<String> convertCSV(@PathVariable String cityAlias,
+                                             @RequestParam(required = false, defaultValue = "1") Integer count) {
+        Integer processed = converterService.convertRecords(count, cityAlias);
+        return ResponseEntity.ok("Обработано " + processed + " записей из " + count);
     }
 
     @GetMapping("/{cityAlias}/all")
-    public void convertALLsCV(@PathVariable String cityAlias) {
-        converterService.convertRecords(-1, cityAlias);
+    public ResponseEntity<String> convertALLsCV(@PathVariable String cityAlias) {
+        Integer processed = converterService.convertRecords(-1, cityAlias);
+        return ResponseEntity.ok("Обработано " + processed + " записей");
     }
 
 }
