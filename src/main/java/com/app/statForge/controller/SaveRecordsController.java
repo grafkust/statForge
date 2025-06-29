@@ -15,9 +15,14 @@ public class SaveRecordsController {
 
 
     @GetMapping("/{cityAlias}")
-    public void convertLA(@PathVariable String cityAlias,
-                          @RequestParam(required = false, defaultValue = "1") Integer count) {
+    public void convertCSV(@PathVariable String cityAlias,
+                           @RequestParam(required = false, defaultValue = "1") Integer count) {
         converterService.convertRecords(count, cityAlias);
+    }
+
+    @GetMapping("/{cityAlias}/all")
+    public void convertALLsCV(@PathVariable String cityAlias) {
+        converterService.convertRecords(-1, cityAlias);
     }
 
 }
