@@ -1,5 +1,6 @@
 package com.app.statForge.util;
 
+import com.app.statForge.model.CatalogItemDto;
 import com.app.statForge.model.CsvColumn;
 import com.app.statForge.model.RecordDto;
 import lombok.extern.slf4j.Slf4j;
@@ -10,12 +11,15 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Component
 @Slf4j
-public class SaveParseUtil {
+public class ParserUtil {
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MM/dd/yyyy hh:mm:ss a");
 
@@ -62,6 +66,12 @@ public class SaveParseUtil {
             log.error("Ошибка при парсинге строки CSV: {}", String.join(",", row), e);
             return null;
         }
+    }
+
+    public List<CatalogItemDto> getCatalogItems(List<Map<String, Object>> rawData) {
+        return rawData.stream()
+                .map(CatalogItemDto::new)
+                .collect(Collectors.toList());
     }
 
 

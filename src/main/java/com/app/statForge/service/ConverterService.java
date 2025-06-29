@@ -4,7 +4,7 @@ import com.app.statForge.model.Cities;
 import com.app.statForge.model.CsvColumn;
 import com.app.statForge.model.FilePaths;
 import com.app.statForge.model.RecordDto;
-import com.app.statForge.util.SaveParseUtil;
+import com.app.statForge.util.ParserUtil;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvException;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +27,7 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class ConverterService {
 
-    private final SaveParseUtil parser;
+    private final ParserUtil parser;
     private final CrimeRecordService crimeRecordService;
     private final FilePaths filePaths;
 
@@ -50,7 +50,7 @@ public class ConverterService {
 
             int processedCount = 0;
             List<RecordDto> processingRecords = new ArrayList<>();
-            Integer cityId = crimeRecordService.getCityIdByName(cityAlias);
+            Long cityId = crimeRecordService.getCityIdByName(cityAlias);
 
             try (CSVReader reader = new CSVReader(new InputStreamReader(stream))) {
                 String[] row;
